@@ -7,8 +7,7 @@ TorqeedoMotor motor;
 
 const int input_vcc = 21; // Pin Relé //! Por Implementar
 //bool motor_status = false; // False = Motor apagado | True = Motor encendido //! Por Implementar
-
-int16_t cmd_vel = 20;
+int16_t cmd_vel = 0; // Velocidad de los motores
 
 // ROS handles
 unsigned int num_handles = 3;   // 1 subscriber, 2 publisher //? +1 publisher auxiliar
@@ -30,13 +29,10 @@ void setup()
     digitalWrite(LED_BUILTIN, LOW);  // Si se enciende, hay un error 
     delay(1000);
 
-    // microros_setup();
-    // microros_add_pubs();
-    // microros_add_subs();
-    // microros_add_timers();
-    // microros_add_executor();
-
-    motor.On();                // Conectar cable TX con pin TX y cable RX con pin RX
+    microros_setup();
+    microros_add_pubs();
+    microros_add_subs();
+    microros_add_executor();
 }
 
 uint8_t received_buff[10];
@@ -52,8 +48,12 @@ uint8_t received_buff[10];
 void loop()
 {
     // ---- Executor ROS ----
-    motor.loop(cmd_vel);     
-    //RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10)));
+    if (Serial.available() > 0) {
+        RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
+        feedback_msg.data = cmd_vel_msg.data;
+        RCSOFTCHECK(rcl_publish(&feedback_pub, &feedback_msg, NULL));
+    }
+    motor.loop(cmd_vel);
 }
 
 
@@ -106,7 +106,6 @@ void microros_add_subs(){
 void sub_turn_callback(const void * msgin){
     // Cast message pointer to expected type
     std_msgs__msg__Int16 * msg = (std_msgs__msg__Int16 *)msgin;
-
     if (msg->data == 1) {
         motor.On();
     }
@@ -119,31 +118,12 @@ void sub_cmd_vel_callback(const void * msgin){
     // Cast message pointer to expected type
     std_msgs__msg__Int16 * msg = (std_msgs__msg__Int16 *)msgin;
     cmd_vel_msg.data = msg->data;
-    cmd_vel = cmd_vel_msg.data;
-}
-
-// ---- MICROROS TIMERS -----
-void microros_add_timers(){
-    const unsigned int timer_timeout = 0; // create timer
-    RCCHECK(rclc_timer_init_default(
-        &timer,
-        &support,
-        RCL_MS_TO_NS(timer_timeout),
-        timer_callback));
-}
-
-void timer_callback(rcl_timer_t *timer, int64_t last_call_time) {
-    RCLC_UNUSED(last_call_time);
-    if (timer != NULL) {
-        feedback_msg.data = cmd_vel_msg.data;
-        RCSOFTCHECK(rcl_publish(&feedback_pub, &feedback_msg, NULL));
-    }
+    cmd_vel = msg->data;
 }
 
 // ---- MICROROS EXECUTOR -----
 void microros_add_executor(){
     RCCHECK(rclc_executor_init(&executor, &support.context, num_handles, &allocator));
-    RCCHECK(rclc_executor_add_timer(&executor, &timer));
     RCCHECK(rclc_executor_add_subscription(&executor, &turn_sub, &turn_msg, &sub_turn_callback, ON_NEW_DATA));
     RCCHECK(rclc_executor_add_subscription(&executor, &cmd_vel_sub, &cmd_vel_msg, &sub_cmd_vel_callback, ON_NEW_DATA));
 }
@@ -152,8 +132,6 @@ void microros_add_executor(){
 void error_loop() {
     while(1) {
         digitalWrite(LED_BUILTIN, HIGH);
-        delay(1000);
-        digitalWrite(LED_BUILTIN, LOW);
     }
 }
 
