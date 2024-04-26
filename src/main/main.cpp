@@ -1,30 +1,42 @@
 #include "variables.hpp"
 
-// Initialize CRC8-Maxim calculation class
-CRC8 crc8;
-// Initialize TorqeedoMotor class
-TorqeedoMotor motor;
+// ----- Run microros node -----
+// ls /dev/serial/by-id/*                                                  -> get serial device name
+// sudo chmod a+wr [serial device name]                                    -> give permissions to serial device
+// ros2 run micro_ros_agent micro_ros_agent serial --dev [nombre del com]  -> start micro_ros agent and microros controller node
 
-const int input_vcc = 21; // Pin Relé //! Por Implementar
+// ---- Send topic messages on terminal -----
+// ros2 topic pub --once /wamv_caleuche/thrusters/turn_on_off std_msgs/msg/Int16 data:\ 1\    -> turn on the motor
+// ros2 topic pub --once /wamv_caleuche/thrusters/turn_on_off std_msgs/msg/Int16 data:\ 0\    -> turn off the motor
+// ros2 topic pub --once /wamv_caleuche/thrusters/right/cmd_vel std_msgs/msg/Int16 data:\ X\  -> set the motor speed to X (-1000 < X < 1000)
+
+
+// String messages management based on:
+// https://github.com/uhobeike/micro-ros-st-nucleo-f446re/blob/master/Core/Src/main.c#L92
+
+
+CRC8 crc8;            // Initialize CRC8-Maxim calculation class
+TorqeedoMotor motor;  // Initialize TorqeedoMotor class
+
+const int input_vcc = 21; // Relay pin //! Por Implementar
 //bool motor_status = false; // False = Motor apagado | True = Motor encendido //! Por Implementar
-int16_t cmd_vel = 0; // Velocidad de los motores
+int16_t cmd_vel = 0; // Motor velocity command
 
-// ROS handles
-unsigned int num_handles = 3;   // 1 subscriber, 2 publisher //? +1 publisher auxiliar
+// microROS handles
+unsigned int num_handles = 3;   // 2 subscribers, 1 publisher
 
 void setup()
 {
-    // ---- SETUP PINES MOTOR ---- 
+    // ---- MOTOR PCB SETUP ---- 
     pinMode(input_vcc, INPUT);
-    motor.begin(1, 17, 16, 33);  // 1=SerialESP/2=SoftwareSerial, Tx=TX2, Rx=RX2, OnOff 33)
+    motor.begin(1, 17, 16, 33);  // 1=ESPSerial, Tx=TX2, Rx=RX2, OnOff=33)
     delay(5000); 
 
-    // ---- SETUP MICROROS ----
-    pinMode(LED_BUILTIN, OUTPUT);    // LED de funcionamiento
-    digitalWrite(LED_BUILTIN, LOW);  // Si se enciende, hay un error 
+    // ---- ESP SETUP ----
+    pinMode(LED_BUILTIN, OUTPUT);    // Error LED
+    digitalWrite(LED_BUILTIN, LOW);  // If there is an error, the LED will turn on
     delay(1000);
-
-    // ---- SETUP ESP ----
+    
     int baud_rate = 115200;
     Serial.begin(baud_rate);
     
@@ -63,14 +75,49 @@ void loop()
 // ------------------------
 
 bool microros_create_entities(){
-    microros_setup();
-    microros_add_pubs();
-    microros_add_subs();
-    microros_add_executor();
+    
+    // Node information
+    const char *node_name = "thruster_controller_right";
+    const char *node_ns = ""; //namespace
+    
+    allocator = rcl_get_default_allocator();
 
+    RCCHECK(rclc_support_init(&support, 0, NULL, &allocator)); //create init_options
+    RCCHECK(rclc_node_init_default(&node, node_name, node_ns, &support)); // create node
+    
+    // ---- MICROROS PUBLISHERS ---- define as many publishers as you need
+    RCCHECK(rclc_publisher_init_default( // create publisher
+        &feedback_pub,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String), 
+        "/wamv_caleuche/thrusters/right/feedback"));
+
+    // ---- MICROROS SUBSCRIBERS ---- define as many subscribers as you need
+    RCCHECK(rclc_subscription_init_default( // create subscriber
+        &turn_sub, 
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int16), 
+        "/wamv_caleuche/thrusters/turn_on_off"));
+    
+    RCCHECK(rclc_subscription_init_default( // create subscriber
+        &cmd_vel_sub, 
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int16), 
+        "/wamv_caleuche/thrusters/right/cmd_vel"));
+    
+    executor = rclc_executor_get_zero_initialized_executor();
+    RCCHECK(rclc_executor_init(&executor, &support.context, num_handles, &allocator));
+    RCCHECK(rclc_executor_add_subscription(&executor, &turn_sub, &turn_msg, &sub_turn_callback, ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_subscription(&executor, &cmd_vel_sub, &cmd_vel_msg, &sub_cmd_vel_callback, ON_NEW_DATA));
+
+    // microros_setup();
+    // microros_add_pubs();
+    // microros_add_subs();
+    // microros_add_executor();
     return true;
 }
 
+// Destroy all microROS entities
 void microros_destroy_entities()
 {
     rmw_context_t * rmw_context = rcl_context_get_rmw_context(&support.context);
@@ -85,6 +132,7 @@ void microros_destroy_entities()
     rclc_support_fini(&support);
 }
 
+// Verifies and restablishes connection with microROS agent
 void microros_loop(){
   switch (state) {
     case WAITING_AGENT:
@@ -115,42 +163,8 @@ void microros_loop(){
   }
 }
 
-// ----- MICROROS SETUP -----
-void microros_setup() {
-    // Configure serial transport
-    const char *node_name = "motor_1_micro_ros";
-    const char *node_ns = ""; //namespace
-    
-    allocator = rcl_get_default_allocator();
-
-    RCCHECK(rclc_support_init(&support, 0, NULL, &allocator)); //create init_options
-    RCCHECK(rclc_node_init_default(&node, node_name, node_ns, &support)); // create node
-}
-
-// ---- MICROROS PUB -----
-void microros_add_pubs(){
-    RCCHECK(rclc_publisher_init_default( // create publisher
-        &feedback_pub,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int16), 
-        "motor_feedback_info"));
-}
-
-// ---- MICROROS SUB -----
-void microros_add_subs(){
-    RCCHECK(rclc_subscription_init_default( // create subscriber
-        &turn_sub, 
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int16), 
-        "/motores/turn_on_off"));
-    
-    RCCHECK(rclc_subscription_init_default( // create subscriber
-        &cmd_vel_sub, 
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int16), 
-        "/motores/cmd_vel"));
-}
-
+// Runs every time a message is received on /wamv_caleuche/thrusters/turn_on_off
+// Turns the motor on or off
 void sub_turn_callback(const void * msgin){
     // Cast message pointer to expected type
     std_msgs__msg__Int16 * msg = (std_msgs__msg__Int16 *)msgin;
@@ -162,6 +176,8 @@ void sub_turn_callback(const void * msgin){
     } 
 }
 
+// Runs every time a message is received on /wamv_caleuche/thrusters/right/cmd_vel
+// Updates the motor velocity command
 void sub_cmd_vel_callback(const void * msgin){
     // Cast message pointer to expected type
     std_msgs__msg__Int16 * msg = (std_msgs__msg__Int16 *)msgin;
@@ -169,26 +185,9 @@ void sub_cmd_vel_callback(const void * msgin){
     cmd_vel = msg->data;
 }
 
-// ---- MICROROS EXECUTOR -----
-void microros_add_executor(){
-    executor = rclc_executor_get_zero_initialized_executor();
-    RCCHECK(rclc_executor_init(&executor, &support.context, num_handles, &allocator));
-    RCCHECK(rclc_executor_add_subscription(&executor, &turn_sub, &turn_msg, &sub_turn_callback, ON_NEW_DATA));
-    RCCHECK(rclc_executor_add_subscription(&executor, &cmd_vel_sub, &cmd_vel_msg, &sub_cmd_vel_callback, ON_NEW_DATA));
-}
-
-// ROS Error handle loop: el led parpadea si hay un error
+// ROS Error Handle Loop: If there is an error, the LED will turn on
 void error_loop() {
     while(1) {
         digitalWrite(LED_BUILTIN, HIGH);
     }
 }
-
-//CONEXIÓN CON ROSAGENT
-// ls /dev/serial/by-id/*                                                  -> ver nombre del COM
-// sudo chmod a+wr [nombre del COM]                                        -> dar permisos al com
-// ros2 run micro_ros_agent micro_ros_agent serial --dev [nombre del com]  -> correr ros en el serial
-
-
-// Manejo de mensaje string basado en:
-// https://github.com/uhobeike/micro-ros-st-nucleo-f446re/blob/master/Core/Src/main.c#L92

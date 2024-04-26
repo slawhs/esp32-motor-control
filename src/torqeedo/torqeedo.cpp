@@ -511,7 +511,6 @@ void TorqeedoMotor::parse_message()
         case DisplayMsgId::SYSTEM_STATE:
             if (_received_buff_len == 30)
             {
-
                 _display_system_state.flags.value = UINT16_VALUE(_received_buff[2], _received_buff[3]);
                 _display_system_state.master_state = _received_buff[4]; // deprecated
                 _display_system_state.master_error_code = _received_buff[5];
@@ -531,7 +530,7 @@ void TorqeedoMotor::parse_message()
                 _display_system_state.temp_rp = _received_buff[28];
                 _display_system_state.last_update_ms = millis();
 
-                // // update esc telem sent to ground station
+                // update esc telem sent to ground station
                 const uint8_t esc_temp = max(_display_system_state.temp_sw, _display_system_state.temp_rp);
                 const uint8_t motor_temp = max(_display_system_state.motor_pcb_temp, _display_system_state.motor_stator_temp);
                 // update_esc_telem(_display_system_state.motor_rpm,
