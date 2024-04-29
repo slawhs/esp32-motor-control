@@ -19,7 +19,10 @@
 #define THROTLE_PIN 23
 #define MIX_PIN 19
 
- EspSoftwareSerial::UART mySerial; //se define un software serial para generar la clase
+//ROS2 USES SERIAL2.
+//MOTOR USES SOFTWARE SERIAL.
+
+EspSoftwareSerial::UART mySerial; //se define un software serial para generar la clase
 
 void TorqeedoMotor::begin(uint8_t ser, uint8_t tx, uint8_t rx, uint8_t onoff)
 {
@@ -263,79 +266,79 @@ void TorqeedoMotor::report_error_codes()
     const char *msg_prefix = "Torqeedo:";
     if (_display_system_state.flags.set_throttle_stop)
     {
-        Serial.print(msg_prefix);
-        Serial.println(" zero throttle required");
+        // Serial.print(msg_prefix);
+        // Serial.println(" zero throttle required");
     }
     if (_display_system_state.flags.temp_warning)
     {
-        Serial.print(msg_prefix);
-        Serial.println(" high temp");
+        // Serial.print(msg_prefix);
+        // Serial.println(" high temp");
     }
     if (_display_system_state.flags.temp_warning)
     {
-        Serial.print(msg_prefix);
-        Serial.println(" batt nearly empty");
+        // Serial.print(msg_prefix);
+        // Serial.println(" batt nearly empty");
     }
     if (_display_system_state.master_error_code > 0)
     {
         const char *error_string = map_master_error_code_to_string(_display_system_state.master_error_code);
         if (error_string != nullptr)
         {
-            Serial.print(" err: ");
-            Serial.print(msg_prefix);
-            Serial.print(" ");
-            Serial.print(_display_system_state.master_error_code);
-            Serial.println(error_string);
+            // Serial.print(" err: ");
+            // // Serial.print(msg_prefix);
+            // Serial.print(" ");
+            // Serial.print(_display_system_state.master_error_code);
+            // Serial.println(error_string);
         }
         else
         {
-            Serial.print(" err: ");
-            Serial.print(msg_prefix);
-            Serial.print(" ");
-            Serial.println(_display_system_state.master_error_code);
+            // Serial.print(" err: ");
+            // Serial.print(msg_prefix);
+            // Serial.print(" ");
+            // Serial.println(_display_system_state.master_error_code);
         }
     }
 
     // report motor status errors
     if (_motor_status.error_flags.overcurrent)
     {
-        Serial.print(msg_prefix);
-        Serial.println("overcurrent");
+        // Serial.print(msg_prefix);
+        // Serial.println("overcurrent");
     }
     if (_motor_status.error_flags.blocked)
     {
-        Serial.print(msg_prefix);
-        Serial.println("prop blocked");
+        // Serial.print(msg_prefix);
+        // Serial.println("prop blocked");
     }
     if (_motor_status.error_flags.overvoltage_static || _motor_status.error_flags.overvoltage_current)
     {
-        Serial.print(msg_prefix);
-        Serial.println(" high voltage");
+        // Serial.print(msg_prefix);
+        // Serial.println(" high voltage");
     }
     if (_motor_status.error_flags.undervoltage_static || _motor_status.error_flags.undervoltage_current)
     {
-        Serial.print(msg_prefix);
-        Serial.println(" low voltage");
+        // Serial.print(msg_prefix);
+        // Serial.println(" low voltage");
     }
     if (_motor_status.error_flags.overtemp_motor || _motor_status.error_flags.overtemp_pcb)
     {
-        Serial.print(msg_prefix);
-        Serial.println(" high temp");
+        // Serial.print(msg_prefix);
+        // Serial.println(" high temp");
     }
     if (_motor_status.error_flags.timeout_rs485)
     {
-        Serial.print(msg_prefix);
-        Serial.println(" comm timeout");
+        // Serial.print(msg_prefix);
+        // Serial.println(" comm timeout");
     }
     if (_motor_status.error_flags.temp_sensor_error)
     {
-        Serial.print(msg_prefix);
-        Serial.println(" temp sensor err");
+        // Serial.print(msg_prefix);
+        // Serial.println(" temp sensor err");
     }
     if (_motor_status.error_flags.tilt)
     {
-        Serial.print(msg_prefix);
-        Serial.print(" tilted");
+        // Serial.print(msg_prefix);
+        // Serial.print(" tilted");
     }
 
     // display OK if all errors cleared
@@ -349,8 +352,8 @@ void TorqeedoMotor::report_error_codes()
 
     if (!now_errored && prev_errored)
     {
-        Serial.print(msg_prefix);
-        Serial.print(" OK");
+        // Serial.print(msg_prefix);
+        // Serial.print(" OK");
     }
 
     // record change in state and reporting time

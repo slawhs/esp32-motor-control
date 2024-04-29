@@ -16,12 +16,12 @@ void setup()
 {
 
     // ---- SETUP ESP ----
-    //int baud_rate = 115200;
-    //Serial.begin(baud_rate);
+    // int baud_rate = 115200;
+    // Serial.begin(baud_rate);
 
     // ---- SETUP PINES MOTOR ---- 
     pinMode(input_vcc, INPUT);
-    motor.begin(1, 17, 16, 33);  // 1=SerialESP/2=SoftwareSerial, Tx=TX2, Rx=RX2, OnOff 33)
+    motor.begin(2, 25, 26, 33);  // 1=SerialESP/2=SoftwareSerial, Tx=TX2, Rx=RX2, OnOff 33)
     delay(5000); 
 
     // ---- SETUP MICROROS ----
@@ -48,7 +48,7 @@ uint8_t received_buff[10];
 void loop()
 {
     // ---- Executor ROS ----
-    if (Serial.available() > 0) {
+    if (Serial2.available() > 0) {
         RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
         feedback_msg.data = cmd_vel_msg.data;
         RCSOFTCHECK(rcl_publish(&feedback_pub, &feedback_msg, NULL));
@@ -68,9 +68,9 @@ void microros_setup() {
     const char *node_ns = ""; //namespace
     
     int baud_rate = 115200;
-    Serial.begin(baud_rate);
+    Serial2.begin(baud_rate);
     
-    set_microros_serial_transports(Serial);
+    set_microros_serial_transports(Serial2);
     delay(2000);
     
     allocator = rcl_get_default_allocator();
@@ -112,7 +112,7 @@ void sub_turn_callback(const void * msgin){
     else if (msg->data == 0) {
         motor.Off();
     } 
-}
+} 
 
 void sub_cmd_vel_callback(const void * msgin){
     // Cast message pointer to expected type
