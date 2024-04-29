@@ -29,7 +29,7 @@ void setup()
 {
     // ---- MOTOR PCB SETUP ---- 
     pinMode(input_vcc, INPUT);
-    motor.begin(1, 17, 16, 33);  // 1=ESPSerial, Tx=TX2, Rx=RX2, OnOff=33)
+    motor.begin(2, 25, 26, 33);  // 1=ESPSerial, Tx=TX2, Rx=RX2, OnOff=33)
     delay(5000); 
 
     // ---- ESP SETUP ----
@@ -38,7 +38,7 @@ void setup()
     delay(1000);
     
     int baud_rate = 115200;
-    Serial.begin(baud_rate);
+    Serial2.begin(baud_rate);
     
     set_microros_serial_transports(Serial);
     delay(2000);
@@ -61,7 +61,7 @@ void loop()
     // ---- Microros Reconnection Manager ----
     microros_loop();
     // ---- Executor ROS ----
-    if (Serial.available() > 0) {
+    if (Serial2.available() > 0) {
         RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
         feedback_msg.data = cmd_vel_msg.data;
         RCSOFTCHECK(rcl_publish(&feedback_pub, &feedback_msg, NULL));
@@ -126,7 +126,7 @@ void microros_destroy_entities()
     rcl_publisher_fini(&feedback_pub, &node);
     rcl_subscription_fini(&turn_sub, &node);
     rcl_subscription_fini(&cmd_vel_sub, &node);
-    rcl_timer_fini(&timer);
+    rcl_timer_fini(&timer); //? Debería ir esto?
     rclc_executor_fini(&executor);
     rcl_node_fini(&node);
     rclc_support_fini(&support);
