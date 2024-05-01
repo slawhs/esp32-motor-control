@@ -1066,3 +1066,18 @@ const char *TorqeedoMotor::map_master_error_code_to_string(uint8_t code)
 
     return nullptr;
 }
+
+int16_t TorqeedoMotor::feedback_getMotorRPM()
+{
+    return _display_system_state.motor_rpm;
+}
+
+int16_t TorqeedoMotor::feedback_getBatteryCharge()
+{
+    return _display_system_state.batt_charge_pct;
+}
+
+const char* TorqeedoMotor::feedback_getError()
+{
+    return map_master_error_code_to_string(_display_system_state.master_error_code);
+}

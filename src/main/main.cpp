@@ -23,13 +23,13 @@ const int input_vcc = 21; // Relay pin //! Por Implementar
 int16_t cmd_vel = 0; // Motor velocity command
 
 // microROS handles
-unsigned int num_handles = 3;   // 2 subscribers, 1 publisher
+unsigned int num_handles = 2;   // 2 subscribers
 
 void setup()
 {
     // ---- MOTOR PCB SETUP ---- 
     pinMode(input_vcc, INPUT);
-    motor.begin(2, 25, 26, 33);  // 1=ESPSerial, Tx=TX2, Rx=RX2, OnOff=33)
+    motor.begin(2, 19, 18, 33);  // 1=ESPSerial, Tx=TX2, Rx=RX2, OnOff=33)
     delay(5000); 
 
     // ---- ESP SETUP ----
@@ -40,10 +40,12 @@ void setup()
     int baud_rate = 115200;
     Serial2.begin(baud_rate);
     
-    set_microros_serial_transports(Serial);
+    set_microros_serial_transports(Serial2);
     delay(2000);
 
     state = WAITING_AGENT;
+
+    // microros_create_entities(); // Comment if using reconection manager
 }
 
 uint8_t received_buff[10];
@@ -59,13 +61,37 @@ uint8_t received_buff[10];
 void loop()
 {
     // ---- Microros Reconnection Manager ----
-    microros_loop();
+    // microros_loop();
     // ---- Executor ROS ----
     if (Serial2.available() > 0) {
         RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
-        feedback_msg.data = cmd_vel_msg.data;
-        RCSOFTCHECK(rcl_publish(&feedback_pub, &feedback_msg, NULL));
+        
+        // ----- Publish feedback info on topics (comment if using reconnection manager) -----
+        // // Publish error feedback
+        // if (motor.feedback_getError() != nullptr){
+        //     //creo el string con el error y lo mofifico
+        //     const char * str = "Error: ";
+        //     rosidl_runtime_c__String ros_str = micro_ros_string_utilities_init(str);
+        //     ros_str = micro_ros_string_utilities_append(ros_str, motor.feedback_getError());
+        //     feedback_error_msg.data.data = ros_str.data;          
+        // }
+        // else {
+        //     //Creo el string con OK
+        //     const char * str = "OK";
+        //     rosidl_runtime_c__String ros_str = micro_ros_string_utilities_init(str);
+        //     feedback_error_msg.data.data = ros_str.data;
+        // }
+        // RCSOFTCHECK(rcl_publish(&feedback_error_pub, &feedback_error_msg, NULL));
+
+        // // Publish rpm feedback
+        // feedback_rpm_msg.data = motor.feedback_getMotorRPM();
+        // RCSOFTCHECK(rcl_publish(&feedback_rpm_pub, &feedback_rpm_msg, NULL));
+    
+        // // Publish battery charge feedback
+        // feedback_battery_charge_msg.data = motor.feedback_getBatteryCharge();
+        // RCSOFTCHECK(rcl_publish(&feedback_battery_charge_pub, &feedback_battery_charge_msg, NULL));
     }
+
     motor.loop(cmd_vel);
 }
 
@@ -85,48 +111,59 @@ bool microros_create_entities(){
     RCCHECK(rclc_support_init(&support, 0, NULL, &allocator)); //create init_options
     RCCHECK(rclc_node_init_default(&node, node_name, node_ns, &support)); // create node
     
-    // ---- MICROROS PUBLISHERS ---- define as many publishers as you need
-    RCCHECK(rclc_publisher_init_default( // create publisher
-        &feedback_pub,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String), 
-        "/wamv_caleuche/thrusters/right/feedback"));
+    // // ---- MICROROS PUBLISHERS ---- define as many publishers as you need
+    // RCCHECK(rclc_publisher_init_default( // create publisher
+    //     &feedback_error_pub,
+    //     &node,
+    //     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String), 
+    //     "/wamv_caleuche/thrusters/right/feedback/error"));
+      
+    // // ---- MICROROS PUBLISHERS ---- define as many publishers as you need
+    // RCCHECK(rclc_publisher_init_default( // create publisher
+    //     &feedback_rpm_pub,
+    //     &node,
+    //     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int16), 
+    //     "/wamv_caleuche/thrusters/right/feedback/rpm"));
+    
+    // // ---- MICROROS PUBLISHERS ---- define as many publishers as you need
+    // RCCHECK(rclc_publisher_init_default( // create publisher
+    //     &feedback_battery_charge_pub,
+    //     &node,
+    //     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int16), 
+    //     "/wamv_caleuche/thrusters/right/feedback/battery_charge"));
 
     // ---- MICROROS SUBSCRIBERS ---- define as many subscribers as you need
-    RCCHECK(rclc_subscription_init_default( // create subscriber
+    RCCHECK(rclc_subscription_init_default( // topic for turning on and off the thruster
         &turn_sub, 
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int16), 
         "/wamv_caleuche/thrusters/turn_on_off"));
     
-    RCCHECK(rclc_subscription_init_default( // create subscriber
+    RCCHECK(rclc_subscription_init_default( // topic for giving velocity commands to the thruster
         &cmd_vel_sub, 
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int16), 
         "/wamv_caleuche/thrusters/right/cmd_vel"));
-    
+
     executor = rclc_executor_get_zero_initialized_executor();
     RCCHECK(rclc_executor_init(&executor, &support.context, num_handles, &allocator));
     RCCHECK(rclc_executor_add_subscription(&executor, &turn_sub, &turn_msg, &sub_turn_callback, ON_NEW_DATA));
     RCCHECK(rclc_executor_add_subscription(&executor, &cmd_vel_sub, &cmd_vel_msg, &sub_cmd_vel_callback, ON_NEW_DATA));
 
-    // microros_setup();
-    // microros_add_pubs();
-    // microros_add_subs();
-    // microros_add_executor();
     return true;
 }
 
-// Destroy all microROS entities
+// Destroys all microROS entities
 void microros_destroy_entities()
 {
     rmw_context_t * rmw_context = rcl_context_get_rmw_context(&support.context);
     (void) rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
-    rcl_publisher_fini(&feedback_pub, &node);
+    rcl_publisher_fini(&feedback_error_pub, &node);
+    rcl_publisher_fini(&feedback_rpm_pub, &node);
+    rcl_publisher_fini(&feedback_battery_charge_pub, &node);
     rcl_subscription_fini(&turn_sub, &node);
     rcl_subscription_fini(&cmd_vel_sub, &node);
-    rcl_timer_fini(&timer); //? Debería ir esto?
     rclc_executor_fini(&executor);
     rcl_node_fini(&node);
     rclc_support_fini(&support);
@@ -136,7 +173,7 @@ void microros_destroy_entities()
 void microros_loop(){
   switch (state) {
     case WAITING_AGENT:
-      EXECUTE_EVERY_N_MS(500, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_AVAILABLE : WAITING_AGENT;);
+      EXECUTE_EVERY_N_MS(1000, state = (RMW_RET_OK == rmw_uros_ping_agent(50, 8)) ? AGENT_AVAILABLE : WAITING_AGENT;);
       break;
 
     case AGENT_AVAILABLE:
@@ -147,9 +184,37 @@ void microros_loop(){
       break;
 
     case AGENT_CONNECTED:
-      EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
+      EXECUTE_EVERY_N_MS(1000, state = (RMW_RET_OK == rmw_uros_ping_agent(50, 8)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
       if (state == AGENT_CONNECTED) {
-        rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
+        if (Serial2.available() > 0) {
+          RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
+
+          // ----- Publish feedback info on topics (comment if NOT using the reconnection manager) -----
+          // // Publish error feedback
+          // if (motor.feedback_getError() != nullptr){
+          //     //creo el string con el error y lo mofifico
+          //     const char * str = "Error: ";
+          //     rosidl_runtime_c__String ros_str = micro_ros_string_utilities_init(str);
+          //     ros_str = micro_ros_string_utilities_append(ros_str, motor.feedback_getError());
+          //     feedback_error_msg.data.data = ros_str.data;          
+          // }
+          // else {
+          //     //Creo el string con OK
+          //     const char * str = "OK";
+          //     rosidl_runtime_c__String ros_str = micro_ros_string_utilities_init(str);
+          //     feedback_error_msg.data.data = ros_str.data;
+          // }
+          // RCSOFTCHECK(rcl_publish(&feedback_error_pub, &feedback_error_msg, NULL));
+
+          // // Publish rpm feedback
+          // feedback_rpm_msg.data = motor.feedback_getMotorRPM();
+          // RCSOFTCHECK(rcl_publish(&feedback_rpm_pub, &feedback_rpm_msg, NULL));
+      
+          // // Publish battery charge feedback
+          // feedback_battery_charge_msg.data = motor.feedback_getBatteryCharge();
+          // RCSOFTCHECK(rcl_publish(&feedback_battery_charge_pub, &feedback_battery_charge_msg, NULL));
+        } 
+        
       }
       break;
       

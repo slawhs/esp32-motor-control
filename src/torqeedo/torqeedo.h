@@ -320,6 +320,13 @@ public:
 
     //    void tx();
     //    void rx();
+
+    //! MODIFICADO POR GAJA
+    int16_t feedback_getMotorRPM();
+
+    int16_t feedback_getBatteryCharge();
+
+    const char * feedback_getError();
 };
 
 #endif
